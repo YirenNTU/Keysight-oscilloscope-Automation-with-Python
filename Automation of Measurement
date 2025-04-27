@@ -1,0 +1,76 @@
+import pyvisa as visa
+import time
+import pandas as pd
+import sys
+
+
+rm = visa.ResourceManager('C:\\Windows\\System32\\visa32.dll')
+
+
+print("Instruments connected to this device")
+print(rm.list_resources())
+
+
+inst_resource = input("input oscilloscope resource: \n")
+inst = rm.open_resource(inst_resource)
+
+
+print("message:")
+inst.timeout = 10000
+inst.clear()
+IDN = str(inst.query('*IDN?'))
+print('Connected to : {}'.format(IDN))
+
+
+inst.write("MEASure:VPP CHAN1")
+
+
+peak_to_peak_list = []
+timestamp_list = []
+
+
+total_seconds = 48*60*60
+interval_seconds = 2
+
+
+total_samples = total_seconds//interval_seconds
+print(f"start measuring every {interval_seconds}s")
+
+
+for i in range(total_samples):
+    try:
+        raw = inst.query(":SINGle;*OPC?;:MEASure:VPP? CHAN1").strip()
+        tokens = raw.split(';')
+        p2p = float(tokens[1])
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+        peak_to_peak_list.append(p2p)
+        timestamp_list.append(ts)
+
+    except Exception as e:
+        print(f"error happened when trying to measure {i+1} ERROR: {e!s}")
+        peak_to_peak_list.append(None)
+        timestamp_list.append(time.strftime("%Y-%m-%d %H:%M:%S"))
+
+
+    time.sleep(interval_seconds)
+
+
+inst.close()
+
+
+df = pd.DataFrame(
+    {
+        'Timestamp': timestamp_list,
+        'Peak-to-Peak(V)': peak_to_peak_list
+    }
+)
+
+
+df.to_csv('peak_to_peak_log.csv',index = False)
+print("save log successfully")
+
+
+
+  
